@@ -1,0 +1,178 @@
+Below is a Technical Functional Requirements Document for the CUPREP process (single state or all states) as described in your query. The document outlines the functional and technical requirements for processing year-quarter (YRQ) data, renaming variables, appending unmatched records, and updating a year-quarters table. It is structured to be clear, concise, and actionable for developers and stakeholders.
+Technical Functional Requirements Document
+Project/System: CUPREP Data Processing
+1. Overview
+The CUPREP process handles year-quarter (YRQ) data for either a single state or all states, performing data transformations, record appending, and table updates. The process involves identifying previous year-quarters, renaming variables, appending unmatched records from a prior quarter, and updating a year-quarters table for future linkage.
+1.1 Purpose
+This document specifies the functional and technical requirements for the CUPREP process to ensure accurate data processing, transformation, and storage for downstream analytics or reporting.
+1.2 Scope
+Processes data for a single state or all states.
+Handles year-quarter datasets (e.g., 2024Q4).
+Renames variables, appends unmatched records, and updates a database table.
+Supports scalability for multiple states and quarters.
+2. Functional Requirements
+2.1 Get Two Previous Year-Quarters (YRQ)
+FR-01: Calculate Previous Year-Quarters
+Description: The system must determine the two previous year-quarters (prevYRQ1 and prevYRQ2) based on the current year-quarter (e.g., 2024Q4).
+Input:
+Current YRQ (e.g., 2024Q4) provided as input or derived from system date.
+Output:
+prevYRQ1: Immediate previous quarter (e.g., 2024Q3 for 2024Q4).
+prevYRQ2: Two quarters prior (e.g., 2024Q2 for 2024Q4).
+Logic:
+Extract year and quarter from current YRQ.
+Calculate prevYRQ1: Subtract one quarter (if Q1, decrement year and set to Q4).
+Calculate prevYRQ2: Subtract two quarters (if Q2, set to Q4 of previous year; if Q1, set to Q3 of previous year).
+Example:
+Input: 2024Q4
+Output: prevYRQ1 = 2024Q3, prevYRQ2 = 2024Q2
+2.2 Rename Variables in prevYRQ1 Dataset
+FR-02: Rename Variables from "c" to "p"
+Description: The system must rename all variables starting with "c" to start with "p" in the dataset for [state][prevYRQ1] (e.g., NY_2024Q3).
+Input:
+Dataset for [state][prevYRQ1] (e.g., NY_2024Q3).
+Output:
+Updated dataset with renamed variables (e.g., c_var1 → p_var1).
+Logic:
+Load dataset for specified state and prevYRQ1.
+Identify all variables (columns) starting with "c".
+Replace "c" with "p" in variable names.
+Save updated dataset.
+Scope:
+Single state: Process one dataset (e.g., NY_2024Q3).
+All states: Iterate through datasets for all states (e.g., NY_2024Q3, CA_2024Q3, etc.).
+2.3 Append Unmatched Records from prevYRQ2 to prevYRQ1
+FR-03: Append Unmatched Records
+Description: The system must append records from [state][prevYRQ2] that did not match during linkage to [state][prevYRQ1], based on the linkage key (e.g., p.cung).
+Input:
+Dataset for [state][prevYRQ1] (post-rename, with p.* variables).
+Dataset for [state][prevYRQ2] (original, with c.* variables).
+Output:
+Updated [state][prevYRQ1] dataset with appended unmatched records from [state][prevYRQ2].
+Logic:
+Load both datasets.
+Identify unmatched records in [state][prevYRQ2] where c.cung does not exist in [state][prevYRQ1]’s p.cung.
+Rename variables in unmatched records from c.* to p.* to align with [state][prevYRQ1].
+Append unmatched records to [state][prevYRQ1].
+Save updated dataset.
+Scope:
+Single state: Process one state’s datasets.
+All states: Iterate through all states’ datasets.
+Assumption:
+p.cung- implies non-null or unmatched records based on the cung key.
+2.4 Insert Current Year-Quarter into IDB Year-Quarters Table
+FR-04: Update IDB Year-Quarters Table
+Description: The system must insert the current YRQ into the IDB year-quarters table to prepare for the next quarter’s linkage.
+Input:
+Current YRQ (e.g., 2024Q4).
+Output:
+New record in the IDB year-quarters table with current YRQ and next quarter for linkage (e.g., 2025Q1).
+Logic:
+Connect to the IDB year-quarters table.
+Insert a record with:
+yr_qtr: Current YRQ (e.g., 2024Q4).
+next_qtr_linkage: Next quarter (e.g., 2025Q1).
+Assumption:
+Table has columns yr_qtr and next_qtr_linkage.
+3. Technical Requirements
+3.1 System Architecture
+Data Storage:
+Datasets stored in a relational database (e.g., PostgreSQL, MySQL) or flat files (e.g., CSV, Parquet).
+IDB year-quarters table in a relational database.
+Processing Environment:
+Language: Python (Pandas for data manipulation) or SQL for database operations.
+Optional: ETL tools (e.g., Apache Airflow, Talend) for workflow orchestration.
+Scalability:
+Support processing for single state or all states (e.g., 50+ datasets for all U.S. states).
+Parallel processing for multiple states to optimize performance.
+3.2 Data Requirements
+Dataset Structure:
+[state][YRQ] datasets (e.g., NY_2024Q3) contain variables like c.cung, c_var1, etc.
+Linkage key: cung (assumed unique identifier for record matching).
+IDB Year-Quarters Table:
+Columns: yr_qtr (string, e.g., 2024Q4), next_qtr_linkage (string, e.g., 2025Q1).
+Data Volume:
+Varies by state and quarter; system must handle datasets with thousands to millions of records.
+3.3 Processing Logic
+YRQ Calculation:
+Parse YRQ as YYYYQX (e.g., 2024Q4).
+Compute previous quarters using modular arithmetic or date libraries (e.g., Python’s datetime).
+Variable Renaming:
+Use string replacement for column names (e.g., c.* → p.*).
+Record Matching:
+Use cung as the linkage key.
+Perform anti-join to identify unmatched records in [state][prevYRQ2].
+Table Update:
+Use SQL INSERT for IDB table updates.
+3.4 Error Handling
+Invalid YRQ:
+Validate YRQ format (e.g., YYYYQX); raise error if invalid.
+Missing Datasets:
+Log and skip missing [state][YRQ] datasets; proceed with available data.
+Duplicate Records:
+Ensure no duplicate cung values in appended records.
+Database Errors:
+Handle connection failures or constraint violations in IDB table updates.
+3.5 Performance Requirements
+Processing Time:
+Single state: Complete within 1 minute per dataset (assuming ~100,000 records).
+All states: Complete within 30 minutes for 50 states.
+Resource Usage:
+Memory: Optimize for datasets up to 1 GB per state.
+CPU: Support parallel processing for multiple states.
+4. Assumptions
+cung is a unique identifier for record linkage.
+Datasets are named consistently (e.g., [state]_[YRQ], like NY_2024Q3).
+IDB year-quarters table exists and is accessible.
+Input YRQ is provided or derived from system date.
+Single-state processing uses a specified state code; all-states processing iterates over a predefined state list.
+5. Pseudo-Code Example
+python
+# Step 1: Get previous YRQs
+current_yrq = "2024Q4"  # Input
+year, quarter = int(current_yrq[:4]), int(current_yrq[-1])
+prevYRQ1 = f"{year if quarter > 1 else year-1}Q{quarter-1 if quarter > 1 else 4}"
+prevYRQ2 = f"{year if quarter > 2 else year-1}Q{quarter-2 if quarter > 2 else 4 if quarter == 2 else 3}"
+
+# Step 2: Rename variables in prevYRQ1
+for state in states:  # Single state or all states
+    dataset = load_dataset(f"{state}_{prevYRQ1}")
+    dataset.columns = [col.replace('c', 'p') if col.startswith('c') else col for col in dataset.columns]
+    save_dataset(dataset, f"{state}_{prevYRQ1}")
+
+# Step 3: Append unmatched records
+    prev1_data = load_dataset(f"{state}_{prevYRQ1}")
+    prev2_data = load_dataset(f"{state}_{prevYRQ2}")
+    unmatched = prev2_data[~prev2_data['c.cung'].isin(prev1_data['p.cung'])]
+    unmatched.columns = [col.replace('c', 'p') if col.startswith('c') else col for col in unmatched.columns]
+    updated_prev1 = prev1_data.append(unmatched)
+    save_dataset(updated_prev1, f"{state}_{prevYRQ1}")
+
+# Step 4: Insert into IDB table
+next_yrq = f"{year+1 if quarter == 4 else year}Q{1 if quarter == 4 else quarter+1}"
+execute_sql(f"INSERT INTO idb_year_qtrs (yr_qtr, next_qtr_linkage) VALUES ('{current_yrq}', '{next_yrq}')")
+6. Dependencies
+Libraries/Tools:
+Python: Pandas, SQLAlchemy (for database access).
+SQL: For IDB table updates.
+Data Access:
+Read/write access to [state][YRQ] datasets.
+Write access to idb_year_qtrs table.
+7. Testing Requirements
+Unit Tests:
+Validate YRQ calculations (e.g., 2024Q4 → 2024Q3, 2024Q2).
+Verify variable renaming (c_var1 → p_var1).
+Confirm unmatched record appending using sample datasets.
+Test IDB table insert with mock data.
+Integration Tests:
+Run CUPREP for a single state and validate output dataset.
+Run CUPREP for multiple states and verify scalability.
+Edge Cases:
+Missing datasets.
+Invalid YRQ formats.
+Empty cung values.
+8. Deliverables
+Codebase: Python scripts or SQL procedures for CUPREP process.
+Documentation: User guide for running the process.
+Logs: Error and execution logs for troubleshooting.
+Output: Updated [state][prevYRQ1] datasets and idb_year_qtrs table.
